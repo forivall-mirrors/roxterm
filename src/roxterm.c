@@ -17,7 +17,6 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-
 #include "defns.h"
 
 #include <sys/types.h>
@@ -44,6 +43,14 @@
 #include "multitab.h"
 #include "shortcuts.h"
 #include "uri.h"
+
+#if VTE_CHECK_VERSION(0, 26, 0)
+#define VTE_HAS_PTY_OBJECT 1
+#define ROXTERM_SET_TERM_ENV 0
+#else
+#define VTE_HAS_PTY_OBJECT 0
+#define ROXTERM_SET_TERM_ENV 1
+#endif
 
 typedef enum {
     ROXTerm_Match_Invalid,
@@ -91,8 +98,6 @@ struct ROXTermData {
     char *encoding;
     double target_zoom_factor, current_zoom_factor;
     int zoom_index;
-    char *title_template;   /* Set if new terminal created by roxterm_launch
-                                and --title was given. */
     gboolean post_exit_tag;
     char *display_name;
     const char *status_stock;
@@ -333,7 +338,6 @@ static ROXTermData *roxterm_data_clone(ROXTermData *old_gt)
     new_gt->win = NULL;
     new_gt->tab = NULL;
     new_gt->running = FALSE;
-    new_gt->title_template = g_strdup(old_gt->title_template);
     new_gt->postponed_free = FALSE;
     new_gt->setup_encodings = FALSE;
     new_gt->dont_lookup_dimensions = FALSE;
@@ -444,48 +448,71 @@ static char **roxterm_modify_environment(char const * const *env,
     return result;
 }
 
-static char **roxterm_get_environment(ROXTermData *roxterm)
+static char **roxterm_get_environment(ROXTermData *roxterm, const char *term)
 {
+    /* We stil set TERM even though vte is supposed to override it because
+     * earlier versions added an additional TERM instead of replacing it, and
+     * the one we add should take priority.
+     */
     char **result;
     char const *new_env[] = {
-        "COLORTERM", NULL,
-        "TERM", NULL,
         "WINDOWID", NULL,
         "ROXTERM_ID", NULL,
         "ROXTERM_NUM", NULL,
         "ROXTERM_PID", NULL,
-        "DISPLAY", NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
         NULL };
+    enum {
+        EnvWindowId,
+        EnvRoxtermId,
+        EnvRoxtermNum,
+        EnvRoxtermPid
+    };
     GList *link;
     int n;
+    const char *cterm;
 
-    new_env[1] = g_strdup(options_lookup_string_with_default(roxterm->profile,
-		    "color_term", "roxterm"));
-    new_env[3] = g_strdup(options_lookup_string_with_default(roxterm->profile,
-		    "term", "xterm"));
-    new_env[5] = g_strdup_printf("%ld",
+    new_env[EnvWindowId * 2 + 1] = g_strdup_printf("%ld",
             GDK_WINDOW_XWINDOW(roxterm->widget->window));
-    new_env[7] = g_strdup_printf("%p", roxterm);
+    new_env[EnvRoxtermId * 2 + 1] = g_strdup_printf("%p", roxterm);
     for (n = 0, link = roxterm_terms; link; ++n, link = g_list_next(link))
     {
         ++n;
         if (link->data == roxterm)
             break;
     }
-    new_env[9] = g_strdup_printf("%d", n);
-    new_env[11] = g_strdup_printf("%d", (int) getpid());
+    new_env[EnvRoxtermNum * 2 + 1] = g_strdup_printf("%d", n);
+    new_env[EnvRoxtermPid * 2 + 1] = g_strdup_printf("%d", (int) getpid());
+    n = EnvRoxtermPid + 1;
     if (roxterm->display_name)
-        new_env[13] = roxterm->display_name;
-    else
-        new_env[12] = NULL;
+    {
+        new_env[n * 2] = "DISPLAY";
+        new_env[n * 2 + 1] = roxterm->display_name;
+        ++n;
+    }
+#if ROXTERM_SET_TERM_ENV
+    if (term)
+    {
+        new_env[n * 2] = "TERM";
+        new_env[n * 2 + 1] = term;
+        ++n;
+    }
+#endif
+    cterm = options_lookup_string(roxterm->profile, "color_term");
+    if (cterm)
+    {
+        new_env[n * 2] = "COLORTERM";
+        new_env[n * 2 + 1] = cterm;
+        ++n;
+    }
     result = roxterm_modify_environment((char const * const *) roxterm->env,
             new_env);
-    g_free((char *) new_env[1]);
-    g_free((char *) new_env[3]);
-    g_free((char *) new_env[5]);
-    g_free((char *) new_env[7]);
-    g_free((char *) new_env[9]);
-    g_free((char *) new_env[11]);
+    g_free((char *) new_env[EnvWindowId * 2 + 1]);
+    g_free((char *) new_env[EnvRoxtermId * 2 + 1]);
+    g_free((char *) new_env[EnvRoxtermNum * 2 + 1]);
+    g_free((char *) new_env[EnvRoxtermPid * 2 + 1]);
     return result;
 }
 
@@ -547,16 +574,18 @@ static gboolean roxterm_command_failed(ROXTermData *roxterm)
     return FALSE;
 }
 
-static char *roxterm_fork_command(VteTerminal *terminal,
+static char *roxterm_fork_command(VteTerminal *vte, const char *term,
         char **argv, char **envv, const char *working_directory,
         gboolean login, gboolean utmp, gboolean wtmp, pid_t *pid)
 {
-#if HAVE_VTE_TERMINAL_FORK_COMMAND_FULL
+#if VTE_HAS_PTY_OBJECT
     GPid *ppid = (GPid *) pid;
     GError *error = NULL;
+    VtePty *pty;
 #endif
     char *filename = argv[0];
     char **new_argv = NULL;
+    char *reply = NULL;
 
     if (login)
     {
@@ -580,30 +609,44 @@ static char *roxterm_fork_command(VteTerminal *terminal,
         argv = new_argv;
     }
 
-#if HAVE_VTE_TERMINAL_FORK_COMMAND_FULL
-    if (!vte_terminal_fork_command_full(terminal,
-            (lastlog ? 0 : VTE_PTY_NO_LASTLOG) |
+#if VTE_HAS_PTY_OBJECT
+    pty = vte_terminal_pty_new(vte,
+            (login ? 0 : VTE_PTY_NO_LASTLOG) |
             (utmp ? 0 : VTE_PTY_NO_UTMP) |
-            (wtmp ? 0 : VTE_PTY_NO_WTMP),
-            working_directory, argv, envv,
-            login ? G_SPAWN_FILE_AND_ARGV_ZERO : G_SPAWN_SEARCH_PATH,
-            NULL, NULL, ppid, &error))
+            (wtmp ? 0 : VTE_PTY_NO_WTMP), &error);
+    if (pty)
     {
-        char *reply = g_strdup_printf(
-                _("The new terminal's command failed to run: %s"),
-                error->message);
-                
-        *pid = -1;
-        g_error_free(error);
-        return reply;
+        vte_terminal_set_pty_object(vte, pty);
+        if (term)
+            vte_pty_set_term(pty, term);
+        if (g_spawn_async(working_directory, argv, envv,
+                G_SPAWN_DO_NOT_REAP_CHILD |
+                    (login ? G_SPAWN_FILE_AND_ARGV_ZERO : G_SPAWN_SEARCH_PATH),
+                (GSpawnChildSetupFunc) vte_pty_child_setup, pty,
+                ppid, &error))
+        {
+            vte_terminal_watch_child(vte, *ppid);
+        }
+        else
+        {
+            reply = g_strdup_printf(
+                    _("The new terminal's command failed to run: %s"),
+                    error->message);
+        }
     }
+    else
+    {
+        reply = g_strdup_printf(_("Failed to create pty: %s"), error->message);
+    }
+    if (error)
+        g_error_free(error);
 #else
-    *pid = vte_terminal_fork_command(terminal, filename,
+    *pid = vte_terminal_fork_command(vte, filename,
             argv + (login ? 1 : 0), envv,
             working_directory, login, utmp, wtmp);
     if (*pid == -1)
     {
-        return g_strdup(_("The new terminal's command failed to run"));
+        reply = g_strdup(_("The new terminal's command failed to run"));
     }
 #endif
 
@@ -613,17 +656,19 @@ static char *roxterm_fork_command(VteTerminal *terminal,
         g_free(new_argv);
     }
     
-    return NULL;
+    if (reply)
+        *pid = -1;
+    return reply;
 }
 
 static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
 {
     char **commandv = NULL;
     char *command = NULL;
-    gboolean special = FALSE;    /* special_command and -e override login_shell
-                                  */
+    gboolean special = FALSE; /* special_command and -e override login_shell */
     gboolean login = FALSE;
-    char **env = roxterm_get_environment(roxterm);
+    const char *term = options_lookup_string(roxterm->profile, "term");
+    char **env = roxterm_get_environment(roxterm, term);
     char *reply = NULL;
 
     roxterm->running = TRUE;
@@ -710,7 +755,7 @@ static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
         gboolean xtmplog = options_lookup_int_with_default(roxterm->profile,
                 "update_records", 1);
 
-        reply = roxterm_fork_command(vte, commandv, env,
+        reply = roxterm_fork_command(vte, term, commandv, env,
                 roxterm->directory, login, xtmplog, xtmplog, &roxterm->pid);
     }
     else
@@ -2631,21 +2676,27 @@ static void roxterm_apply_disable_menu_access(ROXTermData *roxterm)
 
 static void roxterm_apply_title_template(ROXTermData *roxterm)
 {
-    multi_win_set_title_template(roxterm->win, 
-            roxterm->title_template ?
-            roxterm->title_template : _("ROXTerm: %s")); 
+    const char *win_title = global_options_lookup_string("title");
+    gboolean custom_win_title;
+    
+    if (win_title)
+    {
+        custom_win_title = TRUE;
+    }
+    else
+    {
+        custom_win_title = FALSE;
+        win_title = options_lookup_string_with_default(roxterm->profile,
+                    "win_title", "%s");
+    }
+    multi_win_set_title_template(roxterm->win, win_title);
+    if (custom_win_title)
+    {
+        global_options_reset_string("title");
+        multi_win_set_title_template_locked(roxterm->win, TRUE);
+    }
 }
     
-/*
-static void roxterm_apply_emulation(ROXTermData *roxterm, VteTerminal *vte)
-{
-    char *emu = options_lookup_string(roxterm->profile, "emulation");
-
-    vte_terminal_set_emulation(vte, emu);
-    g_free(emu);
-}
-*/
-
 static void roxterm_apply_show_tab_status(ROXTermData *roxterm)
 {
     if (roxterm->tab)
@@ -2690,7 +2741,6 @@ static void roxterm_apply_profile(ROXTermData *roxterm, VteTerminal *vte)
 
     roxterm_update_mouse_autohide(roxterm, vte);
     roxterm_apply_encoding(roxterm, vte);
-    /*roxterm_apply_emulation(roxterm, vte);*/
 
     roxterm_apply_wrap_switch_tab(roxterm);
 
@@ -2796,6 +2846,7 @@ static GtkWidget *roxterm_multi_tab_filler(MultiWin * win, MultiTab * tab,
     int hide_menu_bar;
     MultiWinScrollBar_Position scrollbar_pos;
     char *tab_name;
+    gboolean custom_tab_name = FALSE;
 
     roxterm_terms = g_list_append(roxterm_terms, roxterm);
 
@@ -2858,15 +2909,25 @@ static GtkWidget *roxterm_multi_tab_filler(MultiWin * win, MultiTab * tab,
 
     roxterm_apply_profile(roxterm, vte);
     tab_name = global_options_lookup_string("tab-name");
-    if (!tab_name)
+    if (tab_name)
     {
+        custom_tab_name = TRUE;
+    }
+    else
+    {
+        custom_tab_name = FALSE;
         tab_name = options_lookup_string_with_default(roxterm->profile,
                 "title_string", "%s");
     }
     multi_tab_set_window_title_template(tab, tab_name);
+    multi_tab_set_title_template_locked(tab, custom_tab_name);
+    if (custom_tab_name)
+    {
+        global_options_reset_string("tab-name");
+    }
     g_free(tab_name);
     title_orig = vte_terminal_get_window_title(vte);
-    multi_tab_set_window_title(tab,title_orig ? title_orig : _("ROXTerm"));
+    multi_tab_set_window_title(tab, title_orig ? title_orig : _("ROXTerm"));
 
     roxterm_set_vte_size(roxterm, vte, roxterm->columns, roxterm->rows);
 
@@ -2988,12 +3049,6 @@ static void roxterm_reflect_profile_change(Options * profile, const char *key)
         {
             roxterm_set_select_by_word_chars(roxterm, vte);
         }
-        /*
-        else if (!strcmp(key, "emulation"))
-        {
-            roxterm_apply_emulation(roxterm, vte);
-        }
-        */
         else if (!strcmp(key, "width") || !strcmp(key, "height"))
         {
             roxterm_update_size(roxterm, vte);
@@ -3092,6 +3147,12 @@ static void roxterm_reflect_profile_change(Options * profile, const char *key)
                     options_lookup_string_with_default(roxterm->profile,
                             "title_string", "%s"));
         }
+        else if (!strcmp(key, "win_title"))
+        {
+            multi_win_set_title_template(roxterm->win,
+                    options_lookup_string_with_default(roxterm->profile,
+                            "win_title", "%s"));
+        }
         else if (!strcmp(key, "tab_close_btn"))
         {
             if (roxterm_get_show_tab_close_button(roxterm))
@@ -3183,6 +3244,18 @@ static void roxterm_reflect_colour_change(Options *scheme, const char *key)
     }
 }
 
+static void roxterm_apply_can_edit_shortcuts(void)
+{
+    g_type_class_unref(g_type_class_ref(GTK_TYPE_MENU_ITEM));
+    g_type_class_unref(g_type_class_ref(GTK_TYPE_IMAGE_MENU_ITEM));
+    g_type_class_unref(g_type_class_ref(GTK_TYPE_CHECK_MENU_ITEM));
+    g_type_class_unref(g_type_class_ref(GTK_TYPE_RADIO_MENU_ITEM));
+    gtk_settings_set_long_property(gtk_settings_get_default(),
+            "gtk-can-change-accels",
+            global_options_lookup_int_with_default("edit_shortcuts", FALSE),
+            "roxterm");
+}
+
 static void
 roxterm_opt_signal_handler(const char *profile_name, const char *key,
     OptsDBusOptType opt_type, OptsDBusValue val)
@@ -3211,9 +3284,13 @@ roxterm_opt_signal_handler(const char *profile_name, const char *key,
             roxterm_reflect_colour_change(scheme, key);
         colour_scheme_unref(scheme);
     }
-    else if (!strcmp(profile_name, "Global") && !strcmp(key, "warn_close"))
+    else if (!strcmp(profile_name, "Global") &&
+            (!strcmp(key, "warn_close") ||
+            !strcmp(key, "edit_shortcuts")))
     {
-        options_set_int(global_options, "warn_close", val.i);
+        options_set_int(global_options, key, val.i);
+        if (!strcmp(key, "edit_shortcuts"))
+            roxterm_apply_can_edit_shortcuts();
     }
     else
     {
@@ -3541,7 +3618,7 @@ static void roxterm_get_initial_tabs(ROXTermData *roxterm,
  * geom is freed and set to NULL if it's invalid
  */
 static ROXTermData *roxterm_data_new(const char *display_name,
-        char *title_template, double zoom_factor, const char *directory,
+        double zoom_factor, const char *directory,
         char *profile_name, Options *profile, gboolean maximise,
         const char *colour_scheme_name, char *encoding,
         char **geom, gboolean *size_on_cli, char **env)
@@ -3549,7 +3626,6 @@ static ROXTermData *roxterm_data_new(const char *display_name,
     ROXTermData *roxterm = g_new0(ROXTermData, 1);
 
     roxterm->status_stock = NULL;
-    roxterm->title_template = title_template;
     roxterm->target_zoom_factor = zoom_factor;
     roxterm->current_zoom_factor = 1.0;
     if (display_name)
@@ -3650,8 +3726,8 @@ void roxterm_launch(const char *display_name, char **env)
             global_options_lookup_string_with_default("colour_scheme", "GTK");
     Options *profile = dynamic_options_lookup_and_ref(roxterm_get_profiles(),
             profile_name, "roxterm profile");
+    MultiWin *win = NULL;
     ROXTermData *roxterm = roxterm_data_new(display_name,
-            global_options_lookup_string("title"),
             global_options_lookup_double("zoom"),
             global_options_directory,
             profile_name, profile,
@@ -3661,7 +3737,7 @@ void roxterm_launch(const char *display_name, char **env)
             colour_scheme_name,
             global_options_lookup_string("encoding"),
             &geom, &size_on_cli, env);
-            
+    
     if (!size_on_cli)
     {
         roxterm_default_size_func(roxterm, &roxterm->columns, &roxterm->rows);
@@ -3677,10 +3753,10 @@ void roxterm_launch(const char *display_name, char **env)
     shortcuts = shortcuts_open(shortcut_scheme);
     if (global_options_tab)
     {
-        MultiWin *win = multi_win_all ? multi_win_all->data : NULL;
-        ROXTermData *partner = win ?
-                multi_win_get_user_data_for_current_tab(win) : NULL;
+        ROXTermData *partner;
         
+        win = multi_win_all ? multi_win_all->data : NULL;
+        partner = win ? multi_win_get_user_data_for_current_tab(win) : NULL;
         if (partner)
         {
             roxterm->dont_lookup_dimensions = TRUE;
@@ -3718,14 +3794,16 @@ void roxterm_launch(const char *display_name, char **env)
             options_lookup_int_with_default(roxterm->profile, "full_screen", 0))
     {
         global_options_fullscreen = FALSE;
-        multi_win_new_fullscreen(display_name, shortcuts, roxterm->zoom_index,
-                roxterm, num_tabs, tab_pos, always_show_tabs);
+        win = multi_win_new_fullscreen(display_name, shortcuts,
+                roxterm->zoom_index, roxterm,
+                num_tabs, tab_pos, always_show_tabs);
     }
     else if (roxterm->maximise)
     {
         global_options_maximise = FALSE;
-        multi_win_new_maximised(display_name, shortcuts, roxterm->zoom_index,
-                roxterm, num_tabs, tab_pos, always_show_tabs);
+        win = multi_win_new_maximised(display_name, shortcuts,
+                roxterm->zoom_index, roxterm,
+                num_tabs, tab_pos, always_show_tabs);
     }
     else
     {
@@ -3745,8 +3823,9 @@ void roxterm_launch(const char *display_name, char **env)
                         roxterm->columns, roxterm->rows);
             }
         }
-        multi_win_new_with_geom(display_name, shortcuts, roxterm->zoom_index,
-                roxterm, geom, num_tabs, tab_pos, always_show_tabs);
+        win = multi_win_new_with_geom(display_name, shortcuts,
+                roxterm->zoom_index, roxterm, geom,
+                num_tabs, tab_pos, always_show_tabs);
     }
     g_free(geom);
 
@@ -3887,6 +3966,7 @@ void roxterm_init(void)
         (MultiWinInitialTabs) roxterm_get_initial_tabs,
         (MultiWinDeleteHandler) roxterm_win_delete_handler,
         (MultiTabGetShowCloseButton) roxterm_get_show_tab_close_button);
+    roxterm_apply_can_edit_shortcuts();
 }
 
 gboolean roxterm_spawn_command_line(const gchar *command_line,
@@ -4033,6 +4113,8 @@ typedef struct {
     char *tab_title_template;
     char *tab_title;
     char *icon_title;
+    gboolean win_title_template_locked;
+    gboolean tab_title_template_locked;
     gboolean current;
     MultiTab *active_tab;
 } _ROXTermParseContext;
@@ -4045,6 +4127,8 @@ static void parse_open_win(_ROXTermParseContext *rctx,
     const char *disp = NULL;
     const char *geom = NULL;
     const char *role = NULL;
+    const char *xclass = NULL;
+    const char *xname = NULL;
     const char *font = NULL;
     const char *shortcuts_name = NULL;
     const char *title_template = NULL;
@@ -4062,6 +4146,7 @@ static void parse_open_win(_ROXTermParseContext *rctx,
     rctx->maximised = FALSE;
     rctx->zoom_factor = 1.0;
     rctx->active_tab = NULL;
+    rctx->win_title_template_locked = FALSE;
     for (n = 0; attribute_names[n]; ++n)
     {
         const char *a = attribute_names[n];
@@ -4082,6 +4167,10 @@ static void parse_open_win(_ROXTermParseContext *rctx,
             title = v;
         else if (!strcmp(a, "role"))
             role = v;
+        else if (!strcmp(a, "xclass") && v && v[0])
+            xclass = v;
+        else if (!strcmp(a, "xname") && v && v[0])
+            xname = v;
         else if (!strcmp(a, "shortcut_scheme"))
             shortcuts_name = v;
         else if (!strcmp(a, "show_menubar"))
@@ -4100,6 +4189,8 @@ static void parse_open_win(_ROXTermParseContext *rctx,
             rctx->fullscreen = (strcmp(v, "0") != 0);
         else if (!strcmp(a, "zoom"))
             rctx->zoom_factor = atof(v);
+        else if (!strcmp(a, "title_template_locked"))
+            rctx->win_title_template_locked = atoi(v);
         else
         {
             *error = g_error_new(G_MARKUP_ERROR,
@@ -4122,6 +4213,12 @@ static void parse_open_win(_ROXTermParseContext *rctx,
     {
         rctx->role = g_strdup(role);
         gtk_window_set_role(gwin, role);
+    }
+    if (xclass)
+    {
+        gtk_window_set_wmclass(gwin, xname, xclass);
+        xclass = NULL;
+        xname = NULL;
     }
     if (title_template && title_template[0])
     {
@@ -4181,6 +4278,8 @@ static void close_win_tag(_ROXTermParseContext *rctx)
             gtk_window_set_role(gwin, rctx->role);
         if (rctx->window_title)
             multi_win_set_title(rctx->win, rctx->window_title);
+        multi_win_set_title_template_locked(rctx->win,
+                rctx->win_title_template_locked);
         multi_win_show(rctx->win);
         if (rctx->active_tab)
         {
@@ -4225,6 +4324,7 @@ static void parse_open_tab(_ROXTermParseContext *rctx,
     Options *profile;
     
     rctx->current = FALSE;
+    rctx->tab_title_template_locked = FALSE;
     for (n = 0; attribute_names[n]; ++n)
     {
         const char *a = attribute_names[n];
@@ -4246,6 +4346,8 @@ static void parse_open_tab(_ROXTermParseContext *rctx,
             encoding = v;
         else if (!strcmp(a, "current"))
             rctx->current = (strcmp(v, "0") != 0);
+        else if (!strcmp(a, "title_template_locked"))
+            rctx->tab_title_template_locked = atoi(v);
         else
         {
             *error = g_error_new(G_MARKUP_ERROR,
@@ -4257,7 +4359,7 @@ static void parse_open_tab(_ROXTermParseContext *rctx,
     
     profile = dynamic_options_lookup_and_ref(roxterm_get_profiles(),
             profile_name, "roxterm profile");
-    roxterm = roxterm_data_new(rctx->disp, rctx->window_title_template,
+    roxterm = roxterm_data_new(rctx->disp,
             rctx->zoom_factor, cwd, g_strdup(profile_name), profile,
             rctx->maximised, colours_name, g_strdup(encoding),
             &rctx->geom, NULL, environ);
@@ -4297,6 +4399,8 @@ static void close_tab_tag(_ROXTermParseContext *rctx)
         multi_tab_set_window_title(rctx->tab, rctx->tab_title);
     if (rctx->icon_title && rctx->icon_title[0])
         multi_tab_set_icon_title(rctx->tab, rctx->icon_title);
+    multi_tab_set_title_template_locked(rctx->tab,
+            rctx->tab_title_template_locked);
     g_free(rctx->tab_title_template);
     rctx->tab_title_template = NULL;
     g_free(rctx->tab_title);

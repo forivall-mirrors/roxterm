@@ -52,6 +52,7 @@ struct MultiTab {
     GtkWidget *rename_dialog;
     gboolean postponed_free;
     gboolean old_win_destroyed;
+    gboolean title_template_locked;
 };
 
 struct MultiWin {
@@ -93,6 +94,8 @@ struct MultiWin {
     gboolean composite;
 #endif
     char *display_name;
+    gboolean title_template_locked;
+    char *xclass, *xname;
 };
 
 static double multi_win_zoom_factors[] = {
@@ -454,9 +457,21 @@ void multi_tab_set_window_title_template(MultiTab * tab, const char *template)
     {
         return;
     }
+    if (tab->title_template_locked)
+        return;
     g_free(tab->window_title_template);
     tab->window_title_template = template ? g_strdup(template) : NULL;
     multi_tab_set_full_window_title(tab, template, tab->window_title);
+}
+
+gboolean multi_tab_get_title_template_locked(MultiTab *tab)
+{
+    return tab->title_template_locked;
+}
+
+void multi_tab_set_title_template_locked(MultiTab *tab, gboolean locked)
+{
+    tab->title_template_locked = locked;
 }
 
 const char *multi_tab_get_window_title(MultiTab * tab)
@@ -1098,9 +1113,11 @@ static void multi_win_name_tab_action(MultiWin * win)
             break;
         case GTK_RESPONSE_APPLY:
             name = gtk_entry_get_text(name_e);
+            tab->title_template_locked = FALSE;
             if (name && !name[0])
                 name = NULL;
             multi_tab_set_window_title_template(tab, name);
+            tab->title_template_locked = (name != NULL);
             /* Fall through to destroy */
         default:
             gtk_widget_destroy(dialog_w);
@@ -1156,7 +1173,9 @@ static void multi_win_set_window_title_action(MultiWin * win)
             title = gtk_entry_get_text(title_e);
             if (title && !title[0])
                 title = NULL;
+            win->title_template_locked = FALSE;
             multi_win_set_title_template(win, title);
+            win->title_template_locked = (title == NULL);
             /* Fall through to destroy */
         default:
             gtk_widget_destroy(dialog_w);
@@ -1394,6 +1413,7 @@ MultiWin *multi_win_new_blank(const char *display_name, Options *shortcuts,
     MultiWin *win = g_new0(MultiWin, 1);
     static gboolean set_nwc_hook = FALSE;
     GtkNotebook *notebook;
+    const char *xclass, *xname;
 
     if (!set_nwc_hook)
     {
@@ -1413,6 +1433,22 @@ MultiWin *multi_win_new_blank(const char *display_name, Options *shortcuts,
         win->zoom_index = zoom_index;
 
     win->gtkwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    
+    xclass = global_options_lookup_string("xclass");
+    xname = global_options_lookup_string("xname");
+    if (xclass && !xname)
+        xname = "Roxterm";
+    if (xname && !xclass)
+        xclass = "roxterm";
+    if (xclass)
+    {
+        win->xclass = g_strdup(xclass);
+        win->xname = g_strdup(xname);
+        gtk_window_set_wmclass(GTK_WINDOW(win->gtkwin), xname, xclass);
+        global_options_reset_string("xclass");
+        global_options_reset_string("xname");
+    }
+    
     if (display_name)
     {
         GdkScreen *scr;
@@ -1639,6 +1675,8 @@ static void multi_win_destructor(MultiWin *win, gboolean destroy_widgets)
     {
         g_free(win->display_name);
     }
+    g_free(win->xclass);
+    g_free(win->xname);
     g_free(win);
     multi_win_all = g_list_remove(multi_win_all, win);
     if (!multi_win_all)
@@ -2121,9 +2159,21 @@ void multi_win_set_title_template(MultiWin *win, const char *tt)
 {
     if (!validate_title_template(GTK_WINDOW(win->gtkwin), tt))
         return;
+    if (win->title_template_locked)
+        return;
     g_free(win->title_template);
     win->title_template = tt ? g_strdup(tt) : NULL;
     multi_win_set_full_title(win, tt, win->child_title);
+}
+
+void multi_win_set_title_template_locked(MultiWin *win, gboolean locked)
+{
+    win->title_template_locked = locked;
+}
+
+gboolean multi_win_get_title_template_locked(MultiWin *win)
+{
+    return win->title_template_locked;
 }
 
 const char *multi_win_get_title_template(MultiWin *win)
@@ -2160,6 +2210,13 @@ const char *multi_win_get_shortcuts_scheme_name(MultiWin *win)
 guint multi_win_get_num_tabs(MultiWin *win)
 {
     return g_list_length(win->tabs);
+}
+
+void
+multi_win_get_class_name(MultiWin *win, char const **xclass, char const **xname)
+{
+    *xclass = win->xclass;
+    *xname = win->xname;
 }
 
 /* This is maintained in order of most recently focused */

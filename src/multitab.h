@@ -136,6 +136,10 @@ void multi_tab_set_window_title_template(MultiTab *, const char *);
 
 const char *multi_tab_get_window_title_template(MultiTab *);
 
+gboolean multi_tab_get_title_template_locked(MultiTab *);
+
+void multi_tab_set_title_template_locked(MultiTab *, gboolean);
+
 /* Not the full title */
 const char *multi_tab_get_window_title(MultiTab *);
 
@@ -401,6 +405,10 @@ const char *multi_win_get_title(MultiWin *win);
 
 void multi_win_set_title(MultiWin *win, const char *);
 
+void multi_win_set_title_template_locked(MultiWin *win, gboolean locked);
+
+gboolean multi_win_get_title_template_locked(MultiWin *win);
+
 /* Whether window is managed by a compositor */
 gboolean multi_win_composite(MultiWin *win);
 
@@ -409,6 +417,9 @@ const char *multi_win_get_display_name(MultiWin *win);
 const char *multi_win_get_shortcuts_scheme_name(MultiWin *win);
 
 guint multi_win_get_num_tabs(MultiWin *win);
+
+void multi_win_get_class_name(MultiWin *win,
+        char const **xclass, char const **xname);
 
 #endif /* MULTITAB_H */
 

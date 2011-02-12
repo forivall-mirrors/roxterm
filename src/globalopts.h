@@ -79,6 +79,11 @@ inline static char *global_options_lookup_string(const char *key)
 	return options_lookup_string_with_default(global_options, key, NULL);
 }
 
+inline static int global_options_lookup_int_with_default(const char *key, int d)
+{
+	return options_lookup_int_with_default(global_options, key, d);
+}
+
 inline static int global_options_lookup_int(const char *key)
 {
 	return options_lookup_int(global_options, key);
@@ -87,6 +92,12 @@ inline static int global_options_lookup_int(const char *key)
 inline static double global_options_lookup_double(const char *key)
 {
 	return options_lookup_double(global_options, key);
+}
+
+/* Reset a string option which should only be "one-shot" */
+inline static void global_options_reset_string(const char *key)
+{
+    options_set_string(global_options, key, NULL);
 }
 
 /* Checks CLI args for --appdir without altering argv */
