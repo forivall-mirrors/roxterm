@@ -182,12 +182,15 @@ static void profilegui_set_command_shading(ProfileGUI *pg)
             GTK_TOGGLE_BUTTON(profilegui_widget(pg, "use_custom_command")));
     gboolean use_ssh = gtk_toggle_button_get_active(
             GTK_TOGGLE_BUTTON(profilegui_widget(pg, "use_ssh")));
+    gboolean use_screen = gtk_toggle_button_get_active(
+            GTK_TOGGLE_BUTTON(profilegui_widget(pg, "use_screen")));
 
     gtk_widget_set_sensitive(profilegui_widget(pg, "command"), use_custom);
     gtk_widget_set_sensitive(profilegui_widget(pg, "ssh_host"), use_ssh);
     gtk_widget_set_sensitive(profilegui_widget(pg, "edit_ssh"), use_ssh);
     gtk_widget_set_sensitive(profilegui_widget(pg, "login_shell"),
-            !use_custom && !use_ssh);
+            !use_custom && !use_ssh && !use_screen);
+    gtk_widget_set_sensitive(profilegui_widget(pg, "screen_new"), use_screen);
 }
 
 static void profilegui_set_close_buttons_shading(ProfileGUI *pg)
@@ -314,6 +317,12 @@ static void on_bgtype_toggled(GtkToggleButton *button, ProfileGUI *pg)
 static void on_command_toggled(GtkToggleButton *button, ProfileGUI *pg)
 {
     profilegui_set_command_shading(pg);
+}
+
+static void on_screen_toggled(GtkToggleButton *button, ProfileGUI *pg)
+{
+    profilegui_set_command_shading(pg);
+    on_boolean_toggled(button, pg->profile);
 }
 
 static void on_close_buttons_toggled(GtkToggleButton *button, ProfileGUI *pg)
@@ -590,6 +599,7 @@ static void profilegui_connect_handlers(ProfileGUI * pg)
     PG_CONNECT(pg, on_font_set);
     PG_CONNECT(pg, on_bgtype_toggled);
     PG_CONNECT(pg, on_command_toggled);
+    PG_CONNECT(pg, on_screen_toggled);
     PG_CONNECT(pg, on_close_buttons_toggled);
 #ifdef HAVE_GTK_FILE_CHOOSER_BUTTON_NEW
     g_signal_connect(pg->bgimg, "file-set", G_CALLBACK(on_bgimg_chosen), pg);
@@ -693,6 +703,8 @@ static void profilegui_fill_in_dialog(ProfileGUI * pg)
     capplet_set_boolean_toggle(glade, profile, "login_shell", FALSE);
     capplet_set_boolean_toggle(glade, profile, "update_records", TRUE);
     capplet_set_boolean_toggle(glade, profile, "use_custom_command", FALSE);
+    capplet_set_boolean_toggle(glade, profile, "use_screen", FALSE);
+    capplet_set_boolean_toggle(glade, profile, "screen_new", FALSE);
     capplet_set_text_entry(glade, profile, "command", NULL);
     capplet_set_combo(glade, profile, "exit_action", 0);
     capplet_set_spin_button_float(glade, profile, "exit_pause");

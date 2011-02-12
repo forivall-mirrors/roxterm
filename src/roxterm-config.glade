@@ -747,7 +747,7 @@
                         <child>
                           <widget class="GtkTable" id="table3">
                             <property name="visible">True</property>
-                            <property name="n_rows">5</property>
+                            <property name="n_rows">6</property>
                             <property name="n_columns">3</property>
                             <property name="column_spacing">6</property>
                             <property name="row_spacing">8</property>
@@ -778,8 +778,8 @@
                                 <property name="use_underline">True</property>
                               </widget>
                               <packing>
-                                <property name="top_attach">4</property>
-                                <property name="bottom_attach">5</property>
+                                <property name="top_attach">5</property>
+                                <property name="bottom_attach">6</property>
                                 <property name="x_options">GTK_FILL</property>
                                 <property name="y_options"></property>
                               </packing>
@@ -798,8 +798,8 @@ Ask user</property>
                               <packing>
                                 <property name="left_attach">1</property>
                                 <property name="right_attach">3</property>
-                                <property name="top_attach">3</property>
-                                <property name="bottom_attach">4</property>
+                                <property name="top_attach">4</property>
+                                <property name="bottom_attach">5</property>
                                 <property name="x_options">GTK_FILL</property>
                                 <property name="y_options">GTK_FILL</property>
                               </packing>
@@ -812,8 +812,8 @@ Ask user</property>
                                 <property name="use_underline">True</property>
                               </widget>
                               <packing>
-                                <property name="top_attach">3</property>
-                                <property name="bottom_attach">4</property>
+                                <property name="top_attach">4</property>
+                                <property name="bottom_attach">5</property>
                                 <property name="x_options">GTK_FILL</property>
                                 <property name="y_options"></property>
                               </packing>
@@ -867,8 +867,8 @@ Ask user</property>
                                 <property name="has_tooltip">True</property>
                                 <property name="tooltip" translatable="yes">Click here to edit the ssh details.</property>
                                 <property name="use_underline">True</property>
-                                <signal name="clicked" handler="on_edit_ssh_clicked"/>
                                 <signal name="activate" handler="on_edit_ssh_clicked"/>
+                                <signal name="clicked" handler="on_edit_ssh_clicked"/>
                               </widget>
                               <packing>
                                 <property name="left_attach">2</property>
@@ -958,8 +958,8 @@ Ask user</property>
                               <packing>
                                 <property name="left_attach">2</property>
                                 <property name="right_attach">3</property>
-                                <property name="top_attach">4</property>
-                                <property name="bottom_attach">5</property>
+                                <property name="top_attach">5</property>
+                                <property name="bottom_attach">6</property>
                                 <property name="x_options">GTK_FILL</property>
                                 <property name="y_options">GTK_FILL</property>
                               </packing>
@@ -979,9 +979,48 @@ Ask user</property>
                               <packing>
                                 <property name="left_attach">1</property>
                                 <property name="right_attach">2</property>
-                                <property name="top_attach">4</property>
-                                <property name="bottom_attach">5</property>
+                                <property name="top_attach">5</property>
+                                <property name="bottom_attach">6</property>
                                 <property name="y_options"></property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkCheckButton" id="use_screen">
+                                <property name="label" translatable="yes">S_creen</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">False</property>
+                                <property name="tooltip" translatable="yes">Connect to a screen or run the configured command or shell within the screen utility. If the ssh option is enabled a ssh connection is made to the server and screen run in the ssh session.</property>
+                                <property name="relief">none</property>
+                                <property name="use_underline">True</property>
+                                <property name="draw_indicator">True</property>
+                                <signal name="toggled" handler="on_screen_toggled"/>
+                              </widget>
+                              <packing>
+                                <property name="top_attach">3</property>
+                                <property name="bottom_attach">4</property>
+                                <property name="y_options">GTK_FILL</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkCheckButton" id="screen_new">
+                                <property name="label" translatable="yes">Always create _new screen</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">False</property>
+                                <property name="has_tooltip">True</property>
+                                <property name="tooltip" translatable="yes">If enabled always create a new screen to run the configured command or shell. If disabled try to connect to an existing screen first, prompting the user if more than one is found.</property>
+                                <property name="relief">none</property>
+                                <property name="use_underline">True</property>
+                                <property name="draw_indicator">True</property>
+                                <signal name="toggled" handler="on_boolean_toggled"/>
+                              </widget>
+                              <packing>
+                                <property name="left_attach">1</property>
+                                <property name="right_attach">3</property>
+                                <property name="top_attach">3</property>
+                                <property name="bottom_attach">4</property>
+                                <property name="y_options">GTK_FILL</property>
                               </packing>
                             </child>
                           </widget>
@@ -3459,7 +3498,6 @@ Hidden</property>
     <property name="destroy_with_parent">True</property>
     <property name="type_hint">dialog</property>
     <property name="transient_for">Profile_Editor</property>
-    <property name="has_separator">False</property>
     <child internal-child="vbox">
       <widget class="GtkVBox" id="dialog-vbox4">
         <property name="visible">True</property>
