@@ -757,7 +757,7 @@
                                 <property name="can_focus">True</property>
                                 <property name="tooltip" translatable="yes">Command to run in place of a shell</property>
                                 <property name="invisible_char">&#x2022;</property>
-                                <signal name="changed" handler="on_command_changed"/>
+                                <signal name="changed" handler="on_editable_changed"/>
                                 <signal name="activate" handler="on_entry_activate"/>
                                 <accelerator key="m" signal="grab_focus" modifiers="GDK_MOD1_MASK"/>
                               </widget>
@@ -845,7 +845,7 @@ Ask user</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
                                 <property name="has_tooltip">True</property>
-                                <property name="tooltip" translatable="yes">Connect to a ssh (secure shell) with this profile.</property>
+                                <property name="tooltip" translatable="yes">Connect to a ssh (secure shell) server with this profile.</property>
                                 <property name="use_underline">True</property>
                                 <property name="draw_indicator">True</property>
                                 <property name="group">use_default_shell</property>
@@ -860,13 +860,14 @@ Ask user</property>
                             </child>
                             <child>
                               <widget class="GtkButton" id="edit_ssh">
-                                <property name="label" translatable="yes">_Edit...</property>
+                                <property name="label">gtk-edit</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
                                 <property name="has_tooltip">True</property>
                                 <property name="tooltip" translatable="yes">Click here to edit the ssh details.</property>
                                 <property name="use_underline">True</property>
+                                <property name="use_stock">True</property>
                                 <signal name="activate" handler="on_edit_ssh_clicked"/>
                                 <signal name="clicked" handler="on_edit_ssh_clicked"/>
                               </widget>
@@ -985,16 +986,17 @@ Ask user</property>
                               </packing>
                             </child>
                             <child>
-                              <widget class="GtkCheckButton" id="use_screen">
-                                <property name="label" translatable="yes">S_creen</property>
+                              <widget class="GtkRadioButton" id="use_screen">
+                                <property name="label" translatable="yes">Sc_reen</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
-                                <property name="tooltip" translatable="yes">Connect to a screen or run the configured command or shell within the screen utility. If the ssh option is enabled a ssh connection is made to the server and screen run in the ssh session.</property>
-                                <property name="relief">none</property>
+                                <property name="has_tooltip">True</property>
+                                <property name="tooltip" translatable="yes">Attach to a screen session with this profile.</property>
                                 <property name="use_underline">True</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="on_screen_toggled"/>
+                                <property name="group">use_default_shell</property>
+                                <signal name="toggled" handler="on_command_toggled"/>
                               </widget>
                               <packing>
                                 <property name="top_attach">3</property>
@@ -1003,24 +1005,42 @@ Ask user</property>
                               </packing>
                             </child>
                             <child>
-                              <widget class="GtkCheckButton" id="screen_new">
-                                <property name="label" translatable="yes">Always create _new screen</property>
+                              <widget class="GtkCheckButton" id="screen_ssh">
+                                <property name="label" translatable="yes">Screen via ss_h</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
                                 <property name="has_tooltip">True</property>
-                                <property name="tooltip" translatable="yes">If enabled always create a new screen to run the configured command or shell. If disabled try to connect to an existing screen first, prompting the user if more than one is found.</property>
-                                <property name="relief">none</property>
+                                <property name="tooltip" translatable="yes">Connect to a remote screen session using ssh.</property>
                                 <property name="use_underline">True</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="on_boolean_toggled"/>
+                                <signal name="toggled" handler="on_screen_ssh_toggled"/>
                               </widget>
                               <packing>
                                 <property name="left_attach">1</property>
+                                <property name="right_attach">2</property>
+                                <property name="top_attach">3</property>
+                                <property name="bottom_attach">4</property>
+                                <property name="x_options">GTK_FILL</property>
+                                <property name="y_options"></property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="screen_opts">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Enter any additional screen options here.</property>
+                                <property name="invisible_char">&#x25CF;</property>
+                                <signal name="changed" handler="on_editable_changed"/>
+                                <signal name="activate" handler="on_entry_activate"/>
+                                <accelerator key="m" signal="grab_focus" modifiers="GDK_MOD1_MASK"/>
+                              </widget>
+                              <packing>
+                                <property name="left_attach">2</property>
                                 <property name="right_attach">3</property>
                                 <property name="top_attach">3</property>
                                 <property name="bottom_attach">4</property>
-                                <property name="y_options">GTK_FILL</property>
+                                <property name="y_options"></property>
                               </packing>
                             </child>
                           </widget>
