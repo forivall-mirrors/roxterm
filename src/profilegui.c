@@ -190,19 +190,9 @@ static void profilegui_set_command_shading(ProfileGUI *pg)
             GTK_TOGGLE_BUTTON(profilegui_widget(pg, "use_ssh")));
     gboolean use_screen = gtk_toggle_button_get_active(
             GTK_TOGGLE_BUTTON(profilegui_widget(pg, "use_screen")));
-    GtkWidget *screen_ssh_w = profilegui_widget(pg, "screen_ssh");
-    gboolean screen_ssh;
-
-    if (!use_screen)
-    {
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(screen_ssh_w),
-                screen_ssh = FALSE);
-    }
-    else
-    {
-        screen_ssh = gtk_toggle_button_get_active(
-                GTK_TOGGLE_BUTTON(screen_ssh_w));
-    }
+    gboolean screen_ssh = gtk_toggle_button_get_active(
+            GTK_TOGGLE_BUTTON(profilegui_widget(pg, "screen_ssh")));
+            
     gtk_widget_set_sensitive(profilegui_widget(pg, "command"), use_custom);
     gtk_widget_set_sensitive(profilegui_widget(pg, "ssh_host"),
             use_ssh || screen_ssh);

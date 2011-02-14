@@ -1011,7 +1011,7 @@ Ask user</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
                                 <property name="has_tooltip">True</property>
-                                <property name="tooltip" translatable="yes">Connect to a remote screen session using ssh.</property>
+                                <property name="tooltip" translatable="yes">Connect to a remote screen session using ssh as configured above.</property>
                                 <property name="use_underline">True</property>
                                 <property name="draw_indicator">True</property>
                                 <signal name="toggled" handler="on_screen_ssh_toggled"/>
