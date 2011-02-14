@@ -616,7 +616,7 @@
                                     <property name="can_focus">True</property>
                                     <property name="tooltip" translatable="yes">Words can be selected by double-clicking. Characters not in this list count as the start or end of a word</property>
                                     <property name="invisible_char">&#x2022;</property>
-                                    <signal name="changed" handler="on_sel_by_word_changed"/>
+                                    <signal name="changed" handler="on_editable_changed"/>
                                     <signal name="activate" handler="on_entry_activate"/>
                                   </widget>
                                   <packing>
@@ -653,7 +653,7 @@
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="invisible_char">&#x2022;</property>
-                                    <signal name="changed" handler="on_color_term_changed"/>
+                                    <signal name="changed" handler="on_editable_changed"/>
                                     <signal name="activate" handler="on_entry_activate"/>
                                   </widget>
                                   <packing>
@@ -689,7 +689,7 @@
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="invisible_char">&#x2022;</property>
-                                    <signal name="changed" handler="on_term_changed"/>
+                                    <signal name="changed" handler="on_editable_changed"/>
                                     <signal name="activate" handler="on_entry_activate"/>
                                   </widget>
                                   <packing>
@@ -1116,7 +1116,7 @@ Ask user</property>
                                         <property name="can_focus">True</property>
                                         <property name="tooltip" translatable="yes">Web browser to use when a link is opened</property>
                                         <property name="invisible_char">&#x2022;</property>
-                                        <signal name="changed" handler="on_browser_changed"/>
+                                        <signal name="changed" handler="on_editable_changed"/>
                                         <signal name="activate" handler="on_entry_activate"/>
                                       </widget>
                                       <packing>
@@ -1244,7 +1244,7 @@ Ask user</property>
                                         <property name="can_focus">True</property>
                                         <property name="tooltip" translatable="yes">EMail program to use when an email address is opened</property>
                                         <property name="invisible_char">&#x2022;</property>
-                                        <signal name="changed" handler="on_mailer_changed"/>
+                                        <signal name="changed" handler="on_editable_changed"/>
                                         <signal name="activate" handler="on_entry_activate"/>
                                       </widget>
                                       <packing>
@@ -2158,7 +2158,7 @@ Escape sequence</property>
                                     <property name="can_focus">True</property>
                                     <property name="tooltip" translatable="yes">The title string may include '%s' which is substituted with the title set by the child command (usually the current directory for shells). No other % characters or sequences are permitted except '%%' which is displayed as a single %.</property>
                                     <property name="invisible_char">&#x25CF;</property>
-                                    <signal name="changed" handler="on_title_string_changed"/>
+                                    <signal name="changed" handler="on_editable_changed"/>
                                     <signal name="activate" handler="on_entry_activate"/>
                                   </widget>
                                   <packing>
