@@ -997,6 +997,7 @@ Ask user</property>
                                 <property name="draw_indicator">True</property>
                                 <property name="group">use_default_shell</property>
                                 <signal name="toggled" handler="on_command_toggled"/>
+                                <signal name="toggled" handler="on_boolean_toggled"/>
                               </widget>
                               <packing>
                                 <property name="top_attach">3</property>

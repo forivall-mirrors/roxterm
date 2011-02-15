@@ -564,6 +564,30 @@ static void roxterm_show_status_stock(ROXTermData *roxterm, const char *stock)
     }
 }
 
+static void roxterm_parse_screen(VteTerminal *vte, ROXTermData *roxterm)
+{
+    g_signal_handlers_disconnect_by_func(vte,
+            roxterm_parse_screen, roxterm);
+}
+
+static void roxterm_await_prompt(VteTerminal *vte, ROXTermData *roxterm)
+{
+    char *text = vte_terminal_get_text_include_trailing_spaces(vte,
+            NULL, NULL, NULL);
+    int n = strlen(text);
+    
+    while (isspace(text[--n]));
+    if (strchr("$%#", text[n]))
+    {
+        g_signal_handlers_disconnect_by_func(vte,
+                roxterm_await_prompt, roxterm);
+        g_signal_connect(roxterm->widget, "cursor-moved",
+                G_CALLBACK(roxterm_parse_screen), roxterm);
+        vte_terminal_feed_child(vte, "screen -list\n", -1);
+    }
+    g_free(text);
+}
+
 static gboolean roxterm_command_failed(ROXTermData *roxterm)
 {
     GtkWidget *w = roxterm->win ? multi_win_get_widget(roxterm->win) : NULL;
@@ -686,10 +710,17 @@ static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
     }
     else
     {
+        gboolean use_screen = options_lookup_int_with_default(roxterm->profile,
+                "use_screen", FALSE);
+                
+        g_debug("use_screen: %d", use_screen);
         /* Either use custom command from option or default (as single string)
          */
         if (options_lookup_int_with_default(roxterm->profile,
-                    "use_ssh", FALSE))
+                    "use_ssh", FALSE) ||
+                    (use_screen && 
+                    options_lookup_int_with_default(roxterm->profile,
+                            "screen_ssh", FALSE)))
         {
             const char *host = options_lookup_string_with_default(
                     roxterm->profile, "ssh_address", "localhost");
@@ -700,6 +731,7 @@ static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
             int port = options_lookup_int_with_default(roxterm->profile,
                     "ssh_port", 22);
                     
+            g_debug("ssh");
             command = g_strdup_printf("ssh%s%s %s -p %d %s",
                     (user && user[0]) ? " -l " : "",
                     (user && user[0]) ? user : "",
@@ -719,6 +751,11 @@ static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
         {
             /* Using custom command disables login_shell */
             special = TRUE;
+        }
+        if (use_screen)
+        {
+            g_signal_connect(roxterm->widget, "cursor-moved",
+                    G_CALLBACK(roxterm_await_prompt), roxterm);
         }
     }
     if (roxterm->commandv && !roxterm->special_command)
