@@ -46,10 +46,8 @@
 
 #if VTE_CHECK_VERSION(0, 26, 0)
 #define VTE_HAS_PTY_OBJECT 1
-#define ROXTERM_SET_TERM_ENV 0
 #else
 #define VTE_HAS_PTY_OBJECT 0
-#define ROXTERM_SET_TERM_ENV 1
 #endif
 
 typedef enum {
@@ -492,14 +490,9 @@ static char **roxterm_get_environment(ROXTermData *roxterm, const char *term)
         new_env[n * 2 + 1] = roxterm->display_name;
         ++n;
     }
-#if ROXTERM_SET_TERM_ENV
-    if (term)
-    {
-        new_env[n * 2] = "TERM";
-        new_env[n * 2 + 1] = term;
-        ++n;
-    }
-#endif
+    new_env[n * 2] = "TERM";
+    new_env[n * 2 + 1] = term;
+    ++n;
     cterm = options_lookup_string(roxterm->profile, "color_term");
     if (cterm)
     {
@@ -641,8 +634,9 @@ static char *roxterm_fork_command(VteTerminal *vte, const char *term,
     if (pty)
     {
         vte_terminal_set_pty_object(vte, pty);
-        if (term)
-            vte_pty_set_term(pty, term);
+        if (!term)
+            term = vte_terminal_get_default_emulation(vte);
+        vte_pty_set_term(pty, term);
         if (g_spawn_async(working_directory, argv, envv,
                 G_SPAWN_DO_NOT_REAP_CHILD |
                     (login ? G_SPAWN_FILE_AND_ARGV_ZERO : G_SPAWN_SEARCH_PATH),
@@ -692,9 +686,12 @@ static void roxterm_run_command(ROXTermData *roxterm, VteTerminal *vte)
     gboolean special = FALSE; /* special_command and -e override login_shell */
     gboolean login = FALSE;
     const char *term = options_lookup_string(roxterm->profile, "term");
-    char **env = roxterm_get_environment(roxterm, term);
+    char **env;
     char *reply = NULL;
 
+    if (!term)
+        term = vte_terminal_get_default_emulation(vte);
+    env = roxterm_get_environment(roxterm, term);
     roxterm->running = TRUE;
     roxterm_show_status_stock(roxterm, GTK_STOCK_CLOSE);
     if (roxterm->special_command)
@@ -2107,7 +2104,7 @@ static void roxterm_new_term_with_profile(GtkMenuItem *mitem,
         MenuTree *mtree, gboolean just_tab)
 {
     ROXTermData *roxterm = roxterm_from_menutree(mtree);
-    MultiWin *win = roxterm->win;
+    MultiWin *win;
     const char *profile_name;
     Options *old_profile;
     Options *new_profile;
@@ -2116,6 +2113,7 @@ static void roxterm_new_term_with_profile(GtkMenuItem *mitem,
     if (!roxterm)
         return;
 
+    win = roxterm->win;
     profile_name = g_object_get_data(G_OBJECT(mitem), PROFILE_NAME_KEY);
     if (!profile_name)
     {
