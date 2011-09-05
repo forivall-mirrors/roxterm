@@ -15,9 +15,9 @@ Package: roxterm-common
 Architecture: all
 Depends: ${misc:Depends}
 Replaces: roxterm (<< 2.0.0-1),
-    roxterm (= 2.1.1-1ppa1lucid1), roxterm (= 2.1.1-1ppa1maverick1)
+    roxterm (= 2.1.1-1ppa3lucid1), roxterm (= 2.1.1-1ppa3maverick1)
 Breaks: roxterm (<< 2.0.0-1),
-    roxterm (= 2.1.1-1ppa1lucid1), roxterm (= 2.1.1-1ppa1maverick1)
+    roxterm (= 2.1.1-1ppa3lucid1), roxterm (= 2.1.1-1ppa3maverick1)
 Recommends: roxterm-gtk3 | roxterm-gtk2, openssh-client
 Description: Multi-tabbed GTK+/VTE terminal emulator
  ROXTerm is a terminal emulator based on the VTE library. It was originally
