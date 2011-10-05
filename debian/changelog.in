@@ -1,3 +1,10 @@
+roxterm (2.2.2-1ppa1natty1) natty; urgency=low
+
+  * New upstream version:
+    + Fix corrupted roxterm-config.ui.
+
+ -- Tony Houghton <h@realh.co.uk>  Wed, 05 Oct 2011 19:25:42 +0100
+ 
 roxterm (2.2.1-1ppa1natty1) natty; urgency=low
 
   * New upstream version:
