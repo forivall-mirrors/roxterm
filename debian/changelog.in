@@ -1,3 +1,9 @@
+roxterm (2.4.2-2ppa2natty1) natty; urgency=low
+
+  * debian/control: Include librsvg2-bin in Build-Depends.
+
+ -- Tony Houghton <h@realh.co.uk>  Tue, 21 Feb 2012 16:48:19 +0000
+
 roxterm (2.4.2-1ppa1natty1) natty; urgency=low
 
   * New upstream version:
