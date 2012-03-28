@@ -37,6 +37,29 @@
 #include "roxterm.h"
 #include "session.h"
 
+
+#include <stdarg.h>
+void
+roxterm_sm_log(const char *format, ...)
+{
+    static FILE *fp = NULL;
+    va_list ap;
+    
+    if (!fp)
+    {
+        char *n = g_build_filename(g_get_home_dir(), ".roxterm-sm-log", NULL);
+        fp = fopen(n, "a");
+        g_free(n);
+        g_return_if_fail(fp != NULL);
+        fprintf(fp, "\n*****************\nOpening new log\n");
+    }
+    va_start(ap, format);
+    vfprintf(fp, format, ap);
+    va_end(ap);
+    fputc('\n', fp);
+    fflush(fp);
+}
+
 typedef struct {
     SmcConn smc_conn;
     IceConn ice_conn;
@@ -98,6 +121,7 @@ static void ice_watch_callback(IceConn conn, IcePointer handle,
     {
         int fd = IceConnectionNumber(conn);
         
+        SLOG("Opening ice watch callback on fd %d", fd);
         sd->ice_conn = conn;
         fcntl(fd, F_SETFD, FD_CLOEXEC);
         sd->ioc = g_io_channel_unix_new(fd);
@@ -105,6 +129,7 @@ static void ice_watch_callback(IceConn conn, IcePointer handle,
     }
     else
     {
+        SLOG("Closing ice watch callback");
         if (sd->tag)
         {
             g_source_remove(sd->tag);
@@ -134,11 +159,12 @@ static void save_tab_to_fp(MultiTab *tab, gpointer handle)
             "        encoding='%s'",
             roxterm_get_profile_name(roxterm),
             roxterm_get_colour_scheme_name(roxterm),
-            cwd ? cwd = g_strdup(cwd) : (cwd = g_get_current_dir()),
+            cwd ? cwd : (cwd = g_get_current_dir()),
             name ? name : "", title ? title : "", icon_title ? icon_title : "",
             multi_tab_get_title_template_locked(tab),
             vte_terminal_get_encoding(roxterm_get_vte_terminal(roxterm)));
             
+    SLOG("Saving tab with window_title '%s', cwd %s", title, cwd);
     fprintf(fp, "    %s current='%d'%s>\n", s,
             tab == multi_win_get_current_tab(multi_tab_get_parent(tab)),
             commandv ? "" : " /");
@@ -166,6 +192,7 @@ static gboolean save_session_to_fp(SessionData *sd, FILE *fp)
 {
     GList *wlink;
     
+    SLOG("Saving session with id %s", sd->client_id);
     if (fprintf(fp, "<roxterm_session id='%s'>\n", sd->client_id) < 0)
         return FALSE;
     for (wlink = multi_win_all; wlink; wlink = g_list_next(wlink))
@@ -184,6 +211,7 @@ static gboolean save_session_to_fp(SessionData *sd, FILE *fp)
         gboolean disable_menu_shortcuts, disable_tab_shortcuts;
         char *s;
         
+        SLOG("Saving window with title '%s'", title);
         if (!user_data)
         {
             g_warning(_("Window with no user data"));
@@ -221,8 +249,12 @@ static gboolean save_session_to_fp(SessionData *sd, FILE *fp)
         g_free(s);
         g_free(disp);
         g_free(font_name);
+        SLOG("Saved the window");
         if (result < 0)
+        {
+            SLOG("But it failed!");
             return FALSE;
+        }
         multi_win_foreach_tab(win, save_tab_to_fp, fp);
         if (fprintf(fp, "  </window>\n") < 0)
             return FALSE;
@@ -303,7 +335,8 @@ static SmProp *make_start_command_prop(const char *name, const char *resclone,
                 resclone, client_id);
         int n, m;
         
-        argv = g_new(const char *, session_argc + 1);
+        argv = g_new(const char *, session_argc + 2);
+        /* FIXME: Can be + 1 instead of + 2 if not logging */
         for (n = m = 0; n < session_argc; ++n)
         {
             if (!g_str_has_prefix(session_argv[n], "--restart-session-id=") &&
@@ -313,11 +346,18 @@ static SmProp *make_start_command_prop(const char *name, const char *resclone,
             }
         }
         argv[m++] = idarg;
+        argv[m] = NULL;
+        char *cmd = g_strjoinv(" ", (char **) argv);
+        SLOG("Generated start command for '%s': %s", name, cmd);
+        g_free(cmd);
         prop = make_string_list_propv(m, name, argv);
         g_free(idarg);
     }
     else
     {
+        char *cmd = g_strjoinv(" ", session_argv);
+        SLOG("Generated start command for '%s': %s", name, cmd);
+        g_free(cmd);
         prop = make_string_list_propv(session_argc, name,
                 (char const * const *) session_argv);
     }
@@ -355,6 +395,7 @@ static void session_save_yourself_callback(SmcConn smc_conn, SmPointer handle,
     
     if (!sd->init_done)
     {
+        SLOG("Ignoring SaveYourself because we're initialising");
         /* An extra message is sent in response to initialising the connection
          * so we don't actually want to save state at that point.
          */
@@ -363,6 +404,7 @@ static void session_save_yourself_callback(SmcConn smc_conn, SmPointer handle,
     }
     else if (save_type == SmSaveGlobal)
     {
+        SLOG("Ignoring Global SaveYourself");
         /* Only save state for SmSaveLocal/Both */
         success = TRUE;
     }
@@ -370,6 +412,7 @@ static void session_save_yourself_callback(SmcConn smc_conn, SmPointer handle,
     {
         char *filename = session_get_filename(sd->client_id, TRUE);
         
+        SLOG("Implementing SaveYourself for %s", sd->client_id);
         if (filename)
         {
             FILE *fp = fopen(filename, "w");
@@ -398,16 +441,19 @@ static void session_save_yourself_callback(SmcConn smc_conn, SmPointer handle,
 
 static void die_callback(SmcConn smc_conn, SmPointer handle)
 {
+    SLOG("die_callback");
     SmcCloseConnection(smc_conn, 0, NULL);
     /* FIXME: Should we try to reconnect if not in shutdown? */
 }
 
 static void save_complete_callback(SmcConn smc_conn, SmPointer handle)
 {
+    SLOG("save_complete_callback");
 }
 
 static void shutdown_cancelled_callback(SmcConn smc_conn, SmPointer handle)
 {
+    SLOG("shutdown_cancelled_callback");
 }
 
 void session_init(const char *client_id)
@@ -418,6 +464,7 @@ void session_init(const char *client_id)
             { shutdown_cancelled_callback, NULL } };
     char error_s[256];
             
+    SLOG("session_init(%s)", client_id);
     error_s[0] = 0;
     session_data.client_id = NULL;
     session_data.ioc = NULL;
@@ -444,6 +491,7 @@ void session_init(const char *client_id)
         free(session_data.client_id);
         session_data.client_id = NULL;
     }
+    SLOG("client_id is now %s", session_data.client_id);
 }
 
 gboolean session_load(const char *client_id)
@@ -454,10 +502,12 @@ gboolean session_load(const char *client_id)
     gsize buflen;
     gboolean result;
     
+    SLOG("Loading session %s", client_id);
     if (!g_file_get_contents(filename, &buf, &buflen, &err))
     {
         g_warning(_("Unable to load session '%s': %s"), client_id,
                 err->message);
+        SLOG("Unable to load session '%s': %s", client_id, err->message);
         g_error_free(err);
         return FALSE;
     }

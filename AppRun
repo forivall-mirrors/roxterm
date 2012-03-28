@@ -13,6 +13,7 @@ done
 
 MAINTAIN="--enable-maintainer-mode"
 if [ -f "$APP_DIR/tony" ]; then
+    cd $APP_DIR
     DEV_LDFLAGS="-L/usr/lib/debug $LDFLAGS"
     ulimit -c unlimited
 else

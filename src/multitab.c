@@ -1178,6 +1178,7 @@ MultiWin *multi_win_new_for_tab(const char *display_name, int x, int y,
     const char *title_template = win->title_template;
     gboolean show_menubar = win->show_menu_bar;
 
+    g_debug("Creating new window for tab with tab_pos %d", win->tab_pos);
     gtk_window_get_size(gwin, &w, &h);
     multi_win_get_disable_menu_shortcuts(tab->user_data,
             &disable_menu_shortcuts, &disable_tab_shortcuts);
@@ -1571,6 +1572,15 @@ static void multi_win_move_tab_right_action(MultiWin *win)
     multi_win_move_tab_by_one(win, 1);
 }
 
+static void multi_win_close_window_action(MultiWin *win)
+{
+    if (!multi_win_delete_handler ||
+            !multi_win_delete_handler(win->gtkwin, (GdkEvent *) win, win))
+    {
+        multi_win_destructor(win, TRUE);
+    }
+}
+
 static void multi_win_popup_new_term_with_profile(GtkMenu *menu)
 {
     gtk_menu_popup(menu, NULL, NULL, NULL, NULL, 0, GDK_CURRENT_TIME);
@@ -1581,7 +1591,7 @@ static void multi_win_connect_actions(MultiWin * win)
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_NEW_WINDOW, G_CALLBACK
         (multi_win_new_window_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_CLOSE_WINDOW, G_CALLBACK
-        (multi_win_delete), win, NULL, NULL, NULL);
+        (multi_win_close_window_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_NEW_TAB, G_CALLBACK
         (multi_win_new_tab_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_CLOSE_TAB, G_CALLBACK
@@ -1901,6 +1911,15 @@ MultiWin *multi_win_new_blank(const char *display_name, Options *shortcuts,
         g_object_set(notebook, "tab-vborder", 0, NULL);
     }
 #endif
+    if (tab_pos == -1)
+    {
+        gtk_notebook_set_show_tabs(notebook, always_show_tabs);
+        gtk_notebook_set_show_border(notebook, always_show_tabs);
+    }
+    else
+    {
+        gtk_notebook_set_tab_pos(notebook, tab_pos);
+    }
     gtk_notebook_popup_disable(notebook);
     if (always_show_tabs)
     {
@@ -1960,17 +1979,6 @@ MultiWin *multi_win_new_full(const char *display_name, Options *shortcuts,
     for (n = 0; n < numtabs; ++n)
         multi_tab_new(win, user_data_template);
 
-    if (tab_pos == -1)
-    {
-        gtk_notebook_set_show_tabs(GTK_NOTEBOOK(win->notebook),
-                always_show_tabs);
-        gtk_notebook_set_show_border(GTK_NOTEBOOK(win->notebook),
-                always_show_tabs);
-    }
-    else
-    {
-        gtk_notebook_set_tab_pos(GTK_NOTEBOOK(win->notebook), tab_pos);
-    }
     multi_win_shade_menus_for_tabs(win);
 
     if (geom)

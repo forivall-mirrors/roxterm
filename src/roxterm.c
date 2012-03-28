@@ -47,6 +47,9 @@
 #ifdef HAVE_VTE_TERMINAL_SEARCH_SET_GREGEX
 #include "search.h"
 #endif
+#if ENABLE_SM
+#include "session.h"
+#endif
 #include "shortcuts.h"
 #include "uri.h"
 #include "x11support.h"
@@ -515,7 +518,7 @@ static char **roxterm_modify_environment(char const * const *env,
 
 static char **roxterm_get_environment(ROXTermData *roxterm, const char *term)
 {
-    /* We stil set TERM even though vte is supposed to override it because
+    /* We still set TERM even though vte is supposed to override it because
      * earlier versions added an additional TERM instead of replacing it, and
      * the one we add should take priority.
      */
@@ -539,6 +542,11 @@ static char **roxterm_get_environment(ROXTermData *roxterm, const char *term)
     int n;
     const char *cterm;
 
+    /* Despite called when idle after showing, widget's GdkWindow can still
+     * be NULL at this point (for hidden tabs?) so need to check it's realized.
+     */
+    if (!gtk_widget_get_realized(roxterm->widget))
+        gtk_widget_realize(roxterm->widget);
     new_env[EnvWindowId * 2 + 1] = g_strdup_printf("%ld",
             GDK_WINDOW_XID(gtk_widget_get_window(roxterm->widget)));
     new_env[EnvRoxtermId * 2 + 1] = g_strdup_printf("%p", roxterm);
@@ -965,9 +973,19 @@ static void roxterm_data_delete(ROXTermData *roxterm)
     /* This doesn't delete widgets because they're deleted when removed from
      * the parent */
     GtkWindow *gwin;
+    VtePty *pty = NULL;
     
     g_return_if_fail(roxterm);
     
+    /* Apparently pty doesn't get closed automatically */
+    if (roxterm->widget &&
+            (pty = vte_terminal_get_pty_object(VTE_TERMINAL(roxterm->widget)))
+            != NULL)
+    {
+        vte_pty_close(pty);
+        g_object_unref(pty);
+        vte_terminal_set_pty_object(VTE_TERMINAL(roxterm->widget), NULL);
+    }
     gwin = roxterm_get_toplevel(roxterm);
     if (gwin && roxterm->win_state_changed_tag)
     {
@@ -4376,7 +4394,7 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
     }
     dialog = gtk_message_dialog_new(gtkwin,
             GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-            GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
+            GTK_MESSAGE_WARNING, GTK_BUTTONS_YES_NO,
             msg);
     gtk_window_set_title(GTK_WINDOW(dialog), _("ROXTerm: Confirm close"));
     
@@ -4398,7 +4416,7 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
     gtk_box_pack_start(ca_box, only_running, FALSE, FALSE, 0);
     gtk_widget_show(only_running);
     
-    response = gtk_dialog_run(GTK_DIALOG(dialog)) != GTK_RESPONSE_OK;
+    response = gtk_dialog_run(GTK_DIALOG(dialog)) != GTK_RESPONSE_YES;
     gtk_widget_destroy(dialog);
     return response;
 }
@@ -4668,6 +4686,7 @@ static void parse_open_win(_ROXTermParseContext *rctx,
             return;
         }
     }
+    SLOG("Opening window with title %s", title);
     
     shortcuts = shortcuts_open(shortcuts_name);
     rctx->win = win = multi_win_new_blank(disp, shortcuts,
@@ -4821,6 +4840,7 @@ static void parse_open_tab(_ROXTermParseContext *rctx,
             return;
         }
     }
+    SLOG("Loading tab with icon_title %s, cwd %s", rctx->icon_title, cwd);
     
     profile = dynamic_options_lookup_and_ref(roxterm_get_profiles(),
             profile_name, "roxterm profile");
@@ -5168,6 +5188,7 @@ gboolean roxterm_load_session(const char *xml, gssize len,
         g_error_free(error);
         error = NULL;
     }
+    SLOG("Session loaded, result %d", result);
     return result;
 }
 #endif /* ENABLE_SM */
