@@ -1,3 +1,15 @@
+roxterm (2.6.1-1) unstable; urgency=low
+
+  * Ensure vte widgets realized before reading xid (Closes: #663736).
+  * Explicitly close pty when deleting a terminal.
+  * Warnings apply to closing windows via menu (Closes: #664887).
+  * Debian packaging now maintained in master branch again.
+  * Changed close warning dialog buttons to Yes/No.
+  * Honour login option when restoring a session (Closes: #663739).
+  * Reread GdkWindow when re-mapping windows when compositing changes.
+
+ -- Tony Houghton <h@realh.co.uk>  Sat, 31 Mar 2012 17:36:06 +0100
+
 roxterm (2.5.3-1) unstable; urgency=low
 
   * New upstream version:

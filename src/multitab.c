@@ -1572,6 +1572,15 @@ static void multi_win_move_tab_right_action(MultiWin *win)
     multi_win_move_tab_by_one(win, 1);
 }
 
+static void multi_win_close_window_action(MultiWin *win)
+{
+    if (!multi_win_delete_handler ||
+            !multi_win_delete_handler(win->gtkwin, (GdkEvent *) win, win))
+    {
+        multi_win_destructor(win, TRUE);
+    }
+}
+
 static void multi_win_popup_new_term_with_profile(GtkMenu *menu)
 {
     gtk_menu_popup(menu, NULL, NULL, NULL, NULL, 0, GDK_CURRENT_TIME);
@@ -1582,7 +1591,7 @@ static void multi_win_connect_actions(MultiWin * win)
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_NEW_WINDOW, G_CALLBACK
         (multi_win_new_window_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_CLOSE_WINDOW, G_CALLBACK
-        (multi_win_delete), win, NULL, NULL, NULL);
+        (multi_win_close_window_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_NEW_TAB, G_CALLBACK
         (multi_win_new_tab_action), win, NULL, NULL, NULL);
     multi_win_menu_connect_swapped(win, MENUTREE_FILE_CLOSE_TAB, G_CALLBACK
@@ -1741,6 +1750,7 @@ static void multi_win_composited_changed(GtkWidget *widget, MultiWin *win)
             
             gtk_window_move(GTK_WINDOW(win->gtkwin), x, y);
             gtk_widget_realize(win->gtkwin);
+            dwin = gtk_widget_get_window(win->gtkwin);
             gdk_x11_window_set_user_time(dwin, user_time);
             if (was_minimized)
                 gtk_window_iconify(GTK_WINDOW(win->gtkwin));
