@@ -8,14 +8,14 @@ roxterm (2.6.1-1ppa1lucid1) lucid; urgency=low
   * Honour login option when restoring a session (Closes: #663739).
   * Reread GdkWindow when re-mapping windows when compositing changes.
   * debian/watch: Corrected pcre syntax for uncaptured bz2/gz suffix. 
+  * New windows created for dragged-out tabs use configured tab
+    position setting.
  
- -- Tony Houghton <h@realh.co.uk>  Thu, 19 Apr 2012 23:19:05 +0100
+ -- Tony Houghton <h@realh.co.uk>  Thu, 19 Apr 2012 23:24:27 +0100
 
 roxterm (2.5.4-1ppa1lucid1) unstable; urgency=low
 
   * From upstream version 2.5.3:
-    + New windows created for dragged-out tabs use configured tab
-      position setting.
 
  -- Tony Houghton <h@realh.co.uk>  Wed, 18 Apr 2012 20:20:41 +0100
 
