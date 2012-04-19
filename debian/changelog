@@ -1,4 +1,4 @@
-roxterm (2.5.4-1ppa1lucid1) unstable; urgency=low
+roxterm (2.6.1-1ppa1lucid1) lucid; urgency=low
 
   * Ensure vte widgets realized before reading xid (Closes: #663736).
   * Explicitly close pty when deleting a terminal.
@@ -6,11 +6,18 @@ roxterm (2.5.4-1ppa1lucid1) unstable; urgency=low
   * Changed close warning dialog buttons to Yes/No.
   * Debian packaging now maintained in master branch again.
   * Honour login option when restoring a session (Closes: #663739).
+  * Reread GdkWindow when re-mapping windows when compositing changes.
+  * debian/watch: Corrected pcre syntax for uncaptured bz2/gz suffix. 
+ 
+ -- Tony Houghton <h@realh.co.uk>  Thu, 19 Apr 2012 23:19:05 +0100
+
+roxterm (2.5.4-1ppa1lucid1) unstable; urgency=low
+
   * From upstream version 2.5.3:
     + New windows created for dragged-out tabs use configured tab
       position setting.
 
- -- Tony Houghton <h@realh.co.uk>  Wed, 28 Mar 2012 23:04:59 +0100
+ -- Tony Houghton <h@realh.co.uk>  Wed, 18 Apr 2012 20:20:41 +0100
 
 roxterm (2.5.2-1ppa1lucid1) lucid; urgency=low
 
