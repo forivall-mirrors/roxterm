@@ -1,4 +1,4 @@
-roxterm (2.6.1-1ppa1lucid1) lucid; urgency=low
+roxterm (2.6.2-1ppa1lucid1) lucid; urgency=low
 
   * Ensure vte widgets realized before reading xid (Closes: #663736).
   * Explicitly close pty when deleting a terminal.
@@ -11,7 +11,7 @@ roxterm (2.6.1-1ppa1lucid1) lucid; urgency=low
   * New windows created for dragged-out tabs use configured tab
     position setting.
  
- -- Tony Houghton <h@realh.co.uk>  Thu, 19 Apr 2012 23:30:00 +0100
+ -- Tony Houghton <h@realh.co.uk>  Fri, 20 Apr 2012 14:19:45 +0100
 
 roxterm (2.5.2-1ppa1lucid1) lucid; urgency=low
 
