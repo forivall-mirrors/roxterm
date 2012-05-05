@@ -33,6 +33,7 @@
 #endif
 
 #include "about.h"
+#include "boxcompat.h"
 #include "colourscheme.h"
 #include "dlg.h"
 #include "dragrcv.h"
@@ -54,11 +55,6 @@
 #include "uri.h"
 #include "x11support.h"
 
-#if VTE_CHECK_VERSION(0, 26, 0)
-#define VTE_HAS_PTY_OBJECT 1
-#else
-#define VTE_HAS_PTY_OBJECT 0
-#endif
 
 typedef enum {
     ROXTerm_Match_Invalid,
@@ -646,11 +642,12 @@ static gboolean roxterm_command_failed(ROXTermData *roxterm)
     return FALSE;
 }
 
-static char *roxterm_fork_command(VteTerminal *vte, const char *term,
-        char **argv, char **envv, const char *working_directory,
+static char *roxterm_fork_command(VteTerminal *vte,
+        const char *term, char **argv, char **envv,
+        const char *working_directory,
         gboolean login, gboolean utmp, gboolean wtmp, pid_t *pid)
 {
-#if VTE_HAS_PTY_OBJECT
+#ifdef HAVE_VTE_TERMINAL_GET_PTY_OBJECT
     GPid *ppid = (GPid *) pid;
     GError *error = NULL;
     VtePty *pty;
@@ -681,7 +678,7 @@ static char *roxterm_fork_command(VteTerminal *vte, const char *term,
         argv = new_argv;
     }
 
-#if VTE_HAS_PTY_OBJECT
+#ifdef HAVE_VTE_TERMINAL_GET_PTY_OBJECT
     pty = vte_terminal_pty_new(vte,
             (login ? 0 : VTE_PTY_NO_LASTLOG) |
             (utmp ? 0 : VTE_PTY_NO_UTMP) |
@@ -706,6 +703,10 @@ static char *roxterm_fork_command(VteTerminal *vte, const char *term,
                     _("The new terminal's command failed to run: %s"),
                     error->message);
         }
+        /* The VteTerminal and we both own a reference, so drop our ref to
+         * ensure pty is destroyed with terminal.
+         */
+        g_object_unref(pty);
     }
     else
     {
@@ -975,32 +976,9 @@ static void roxterm_data_delete(ROXTermData *roxterm)
     /* This doesn't delete widgets because they're deleted when removed from
      * the parent */
     GtkWindow *gwin;
-#ifdef HAVE_VTE_TERMINAL_GET_PTY_OBJECT
-    VtePty *pty = NULL;
-#else
-    int pty = -1;
-#endif
     
     g_return_if_fail(roxterm);
     
-    /* Apparently pty doesn't get closed automatically */
-#ifdef HAVE_VTE_TERMINAL_GET_PTY_OBJECT
-    if (roxterm->widget &&
-            (pty = vte_terminal_get_pty_object(VTE_TERMINAL(roxterm->widget)))
-            != NULL)
-    {
-        vte_pty_close(pty);
-        g_object_unref(pty);
-        vte_terminal_set_pty_object(VTE_TERMINAL(roxterm->widget), NULL);
-    }
-#else
-    if (roxterm->widget &&
-            (pty = vte_terminal_get_pty(VTE_TERMINAL(roxterm->widget))) != -1)
-    {
-        close(pty);
-        vte_terminal_set_pty(VTE_TERMINAL(roxterm->widget), -1);
-    }
-#endif
     gwin = roxterm_get_toplevel(roxterm);
     if (gwin && roxterm->win_state_changed_tag)
     {
@@ -3224,6 +3202,27 @@ static GtkWidget *roxterm_multi_tab_filler(MultiWin * win, MultiTab * tab,
             "scrollbar_pos", MultiWinScrollBar_Right));
     if (scrollbar_pos)
     {
+#if GTK_CHECK_VERSION(3, 0, 0)
+        GtkGrid *grid = GTK_GRID(roxterm->hbox = gtk_grid_new());
+        
+        roxterm->scrollbar =
+                gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL,
+                        vte_terminal_get_adjustment(vte));
+        if (scrollbar_pos == MultiWinScrollBar_Left)
+        {
+            gtk_grid_attach(grid, roxterm->scrollbar, 0, 0, 1, 1);
+            gtk_grid_attach(grid, roxterm->widget, 1, 0, 1, 1);
+        }
+        else
+        {
+            gtk_grid_attach(grid, roxterm->widget, 0, 0, 1, 1);
+            gtk_grid_attach(grid, roxterm->scrollbar, 1, 0, 1, 1);
+        }
+        g_object_set(roxterm->widget, "hexpand", TRUE,
+                "vexpand", TRUE, NULL);
+        g_object_set(roxterm->scrollbar, "hexpand", FALSE,
+                "vexpand", TRUE, NULL);
+#else
         roxterm->hbox = gtk_hbox_new(FALSE, 0);
         roxterm->scrollbar =
                 gtk_vscrollbar_new(vte_terminal_get_adjustment(vte));
@@ -3241,6 +3240,7 @@ static GtkWidget *roxterm_multi_tab_filler(MultiWin * win, MultiTab * tab,
             gtk_box_pack_start(GTK_BOX(roxterm->hbox), roxterm->scrollbar,
                     FALSE, FALSE, 0);
         }
+#endif
         gtk_widget_show_all(roxterm->hbox);
     }
     else
@@ -4367,7 +4367,7 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
     const char *msg;
     MultiWin *win = event ? data : NULL;
     ROXTermData *roxterm = event ? NULL : data;
-    GtkBox *ca_box;
+    GtkWidget *ca_box;
     
     d.warn = global_options_lookup_int_with_default("warn_close", 3);
     d.only_running = global_options_lookup_int_with_default("only_warn_running",
@@ -4413,13 +4413,13 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
             msg);
     gtk_window_set_title(GTK_WINDOW(dialog), _("ROXTerm: Confirm close"));
     
-    ca_box = GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog)));
+    ca_box = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
     
     noshow = gtk_check_button_new_with_mnemonic(_("_Don't show this again"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(noshow), FALSE);
     g_signal_connect(noshow, "toggled",
             G_CALLBACK(dont_show_again_toggled), &d);
-    gtk_box_pack_start(ca_box, noshow, FALSE, FALSE, 0);
+    box_compat_packv(ca_box, noshow, FALSE, 0);
     gtk_widget_show(noshow);
     
     only_running = gtk_check_button_new_with_mnemonic(
@@ -4428,7 +4428,7 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
             d.only_running);
     g_signal_connect(only_running, "toggled",
             G_CALLBACK(only_running_toggled), &d);
-    gtk_box_pack_start(ca_box, only_running, FALSE, FALSE, 0);
+    box_compat_packv(ca_box, only_running, FALSE, 0);
     gtk_widget_show(only_running);
     
     response = gtk_dialog_run(GTK_DIALOG(dialog)) != GTK_RESPONSE_YES;
