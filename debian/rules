@@ -11,6 +11,9 @@ CONFIGURE_COMMON = $(CONFIGURE_GDA) $(CONFIGURE_LDFLAGS) $(CONFIGURE_MISC)
 MSCRIPT_OPTS = --lock-top
 COMMON_DIRS = --top-dir=../.. --src-dir='$${TOP_DIR}/src'
 DIRS_GTK2 = --build-dir=debian/build-gtk2 $(COMMON_DIRS)
+CFLAGS = $(shell dpkg-buildflags | grep '^CFLAGS=')
+CPPFLAGS = $(shell dpkg-buildflags | grep '^CPPFLAGS=')
+LDFLAGS = $(shell dpkg-buildflags | grep '^LDFLAGS=') -Wl,--as-needed
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
@@ -22,7 +25,8 @@ endif
 
 override_dh_auto_configure:
 	python mscript.py configure $(MSCRIPT_OPTS) $(CONFIGURE_COMMON) \
-		 --disable-gtk3 $(DIRS_GTK2)
+		 --disable-gtk3 $(DIRS_GTK2) \
+		 "$(CFLAGS)" "$(CPPFLAGS)" "$(LDFLAGS)"
 
 override_dh_auto_build:
 	python mscript.py build $(MSCRIPT_OPTS) $(DIRS_GTK2)

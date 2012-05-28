@@ -5,7 +5,7 @@ import errno, os, re, sys, time
 from maitch import *
 
 ctx = Context(PACKAGE = "roxterm", SRC_DIR = "${TOP_DIR}/src",
-        CFLAGS = "-O2 -g -Wall -I. -I${SRC_DIR} -D_GNU_SOURCE -DHAVE_CONFIG_H")
+        MCFLAGS = "${CPPFLAGS} -I. -I${SRC_DIR} -D_GNU_SOURCE -DHAVE_CONFIG_H")
 
 
 MINILIB_SOURCES = "colourscheme.c dlg.c display.c dragrcv.c dynopts.c " \
@@ -204,21 +204,23 @@ if ctx.mode == 'configure':
             "gdk_window_get_display gdk_window_get_screen " \
             "gtk_widget_get_realized gtk_widget_get_mapped " \
             "gtk_combo_box_text_new gtk_rc_style_unref".split():
-        ctx.check_func(f, "${CFLAGS} ${GTK_CFLAGS}", "${LIBS} ${GTK_LIBS}")
+        ctx.check_func(f, "${CFLAGS} ${MCFLAGS} ${GTK_CFLAGS}",
+                "${LIBS} ${GTK_LIBS}")
     for f in ["vte_terminal_search_set_gregex", "vte_terminal_get_pty_object"]:
-        ctx.check_func(f, "${CFLAGS} ${VTE_CFLAGS}", "${LIBS} ${VTE_LIBS}")
+        ctx.check_func(f, "${CFLAGS} ${MCFLAGS} ${VTE_CFLAGS}",
+                "${LIBS} ${VTE_LIBS}")
     
     ctx.setenv('CORE_CFLAGS',
-            "${CFLAGS} ${GTK_CFLAGS} ${DBUS_CFLAGS}")
+            "${CFLAGS} ${MCFLAGS} ${GTK_CFLAGS} ${DBUS_CFLAGS}")
     ctx.setenv('CORE_LIBS',
             "${LIBS} ${GTK_LIBS} ${DBUS_LIBS}")
     ctx.setenv('ROXTERM_CFLAGS',
-            "${CFLAGS} ${VTE_CFLAGS} ${SM_CFLAGS} ${DBUS_CFLAGS}")
+            "${CFLAGS} ${MCFLAGS} ${VTE_CFLAGS} ${SM_CFLAGS} ${DBUS_CFLAGS}")
     ctx.setenv('ROXTERM_LIBS',
             "${LIBS} ${VTE_LIBS} ${SM_LIBS} ${DBUS_LIBS}")
     ctx.setenv('ROXTERM_CONFIG_CFLAGS',
-            "${CFLAGS} ${GTK_CFLAGS} ${DBUS_CFLAGS} ${GMODULE_CFLAGS} "
-            "-DROXTERM_CAPPLET")
+            "${CFLAGS} ${MCFLAGS} ${GTK_CFLAGS} ${DBUS_CFLAGS} " \
+            "${GMODULE_CFLAGS} -DROXTERM_CAPPLET")
     ctx.setenv('ROXTERM_CONFIG_LIBS',
             "${LIBS} ${GTK_LIBS} ${DBUS_LIBS} ${GMODULE_LIBS}")
     
@@ -262,11 +264,13 @@ if ctx.mode == 'configure':
 elif ctx.mode == 'build':
 
     # Private library
-    ctx.add_rule(StaticLibCRule(
-            cflags = "${CORE_CFLAGS}",
-            prefix = "libroxterm-",
-            quiet = True))
-    ctx.add_rule(StaticLibRule(
+    for c in MINILIB_SOURCES.split():
+        ctx.add_rule(StaticLibCRule(
+                sources = c,
+                cflags = "${CORE_CFLAGS}",
+                prefix = "libroxterm-",
+                quiet = True))
+    ctx.add_rule(CStaticLibRule(
             sources = change_suffix_with_prefix(MINILIB_SOURCES,
                     ".c", ".lo", "libroxterm-"),
             targets = "libroxterm.la",
@@ -279,13 +283,15 @@ elif ctx.mode == 'build':
         ROXTERM_SOURCES += " session.c"
     if bool(ctx.env['HAVE_VTE_TERMINAL_SEARCH_SET_GREGEX']):
         ROXTERM_SOURCES += " search.c"
-    ctx.add_rule(CRule(
-            cflags = "${ROXTERM_CFLAGS}",
-            prefix = "roxterm-",
-            wdeps = "version.h"))
-    ctx.add_rule(LibtoolProgramRule(
+    for c in ROXTERM_SOURCES.split():
+        ctx.add_rule(LibtoolCRule(
+                sources = c,
+                cflags = "${ROXTERM_CFLAGS}",
+                prefix = "roxterm-",
+                wdeps = "version.h"))
+    ctx.add_rule(LibtoolCProgramRule(
             sources = change_suffix_with_prefix(ROXTERM_SOURCES,
-                    ".c", ".o", "roxterm-"),
+                    ".c", ".lo", "roxterm-"),
             targets = "roxterm",
             cflags = "${ROXTERM_CFLAGS}",
             libs = "${ROXTERM_LIBS} -lroxterm",
@@ -293,12 +299,14 @@ elif ctx.mode == 'build':
             quiet = True))
 
     # roxterm-config
-    ctx.add_rule(CRule(
-            cflags = "${ROXTERM_CONFIG_CFLAGS}",
-            prefix = "roxterm-config-"))
-    ctx.add_rule(LibtoolProgramRule(
+    for c in ROXTERM_CONFIG_SOURCES.split():
+        ctx.add_rule(LibtoolCRule(
+                sources = c,
+                cflags = "${ROXTERM_CONFIG_CFLAGS}",
+                prefix = "roxterm-config-"))
+    ctx.add_rule(LibtoolCProgramRule(
             sources = change_suffix_with_prefix(ROXTERM_CONFIG_SOURCES,
-                    ".c", ".o", "roxterm-config-"),
+                    ".c", ".lo", "roxterm-config-"),
             targets = "roxterm-config",
             cflags = "${ROXTERM_CONFIG_CFLAGS}",
             libs = "${ROXTERM_CONFIG_LIBS} -lroxterm",
@@ -477,7 +485,7 @@ elif ctx.mode == "install" or ctx.mode == "uninstall":
     ctx.install_data("roxterm.desktop", "${DATADIR}/applications")
     if ctx.env['XMLTOMAN']:
         ctx.install_man("roxterm.1 roxterm-config.1")
-    ctx.install_doc("AUTHORS ChangeLog COPYING COPYING-LGPL README")
+    ctx.install_doc("AUTHORS ChangeLog README")
     ctx.install_doc(ctx.glob("*.html",
             subdir = ctx.subst("${TOP_DIR}/Help/en")),
             "${HTMLDIR}/en")
